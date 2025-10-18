@@ -181,12 +181,12 @@ class EDGalaxyMap:
 
             # zoom camera which puts focus back on the map
             ap.keys.send('CamZoomIn')
-            sleep(0.05)
+            sleep(0.5) # sleep(0.05)
 
             # plot route. Not that once the system has been selected, as shown in the info panel
             # and the gal map has focus, there is no need to wait for the map to bring the system
             # to the center screen, the system can be selected while the map is moving.
-            ap.keys.send('UI_Select', hold=0.75)
+            ap.keys.send('UI_Select', hold=1.5) # ap.keys.send('UI_Select', hold=0.75)
 
             sleep(0.05)
 

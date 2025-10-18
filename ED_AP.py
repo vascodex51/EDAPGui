@@ -1283,6 +1283,66 @@ class EDAutopilot:
 
         return False
 
+    def sc_disengage_new(self, scr_reg) -> bool:
+        """
+        Improved Template Matching
+        """
+        region_name = 'disengage'
+        templ_name = 'disengage'
+
+        # 1. Screen capture (BGR)
+        raw_region_rect = scr_reg.reg[region_name]['rect']
+        full_image_raw = self.scr.get_screen_region(raw_region_rect, rgb=True)
+        if full_image_raw is None:
+            return False
+
+        # 2. Convert image to HSV color space (better for color isolation)
+        hsv_image = cv2.cvtColor(full_image_raw, cv2.COLOR_BGR2HSV)
+
+        # 3. COLOR MASK CREATION: Obtain only luminosity channel
+        luminosity_channel = hsv_image[:, :, 2]
+
+        # 4. Apply high threshold
+        _, img_binary = cv2.threshold(luminosity_channel, 180, 255, cv2.THRESH_BINARY)
+
+        # 5. Template matching
+        template_data = scr_reg.templates.template[templ_name]
+        match = cv2.matchTemplate(img_binary, template_data['image'], cv2.TM_CCOEFF_NORMED)
+        (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(match)
+
+        pt = maxLoc
+        width = template_data['width']
+        height = template_data['height']
+
+        if maxVal < scr_reg.disengage_thresh:
+            ly_overlay_color = (255, 0, 0) # red (RGB)
+            cv_overlay_color = (0, 0, 255) # red (BGR)
+        else:
+            ly_overlay_color = (0, 255, 0) # green (RGB)
+            cv_overlay_color = (0, 255, 0) # green (BGR)
+
+        if self.debug_overlay:
+            self.overlay.overlay_rect1('sc_disengage_new', raw_region_rect, ly_overlay_color, 1) # red (BGR)
+            self.overlay.overlay_floating_text('sc_disengage_new',
+                                               f'Match: {maxVal:5.4f} > {scr_reg.disengage_thresh}',
+                                               raw_region_rect[0], raw_region_rect[1] - 25, ly_overlay_color)
+            self.overlay.overlay_paint()
+
+        if self.cv_view:
+            img_display = cv2.cvtColor(img_binary, cv2.COLOR_GRAY2BGR)
+            dis_image = cv2.rectangle(img_display, pt, (pt[0] + width, pt[1] + height), cv_overlay_color, 1)
+            cv2.putText(dis_image, f'{maxVal:5.4f} > {scr_reg.disengage_thresh}', (1, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, cv_overlay_color, 1, cv2.LINE_AA)
+            cv2.imshow('sc_disengage_new', dis_image)
+            cv2.moveWindow('sc_disengage_new', self.cv_view_x + 20, self.cv_view_y + 575)
+            cv2.waitKey(1)
+
+        # Fast threshold check
+        if maxVal < scr_reg.disengage_thresh:
+            return False
+
+        logger.info(f"sc_disengage: template matching maxVal = {maxVal:.4f}")
+        return True
+
     def start_sco_monitoring(self):
         """ Start Supercruise Overcharge Monitoring. This starts a parallel thread used to detect SCO
         until stop_sco_monitoring if called. """
@@ -1329,7 +1389,8 @@ class EDAutopilot:
 
             # Check SC Disengage, but only when not in SC Overcharge
             if not self.sc_sco_is_active:
-                self._sc_disengage_active = self.sc_disengage(self.scrReg)
+                #self._sc_disengage_active = self.sc_disengage(self.scrReg)
+                self._sc_disengage_active = self.sc_disengage_new(self.scrReg)
             else:
                 self._sc_disengage_active = False
 
@@ -1616,12 +1677,12 @@ class EDAutopilot:
             'found': Target found
             'disengage': Disengage text found
         """
-        outer_lim = 2.0  # In deg. Anything outside of this range will cause alignment.
-        inner_lim = 1.0  # In deg. Will stop alignment when in this range.
+        outer_lim = 0.5 # 2.0  # In deg. Anything outside of this range will cause alignment.
+        inner_lim = 0.5 # 1.0  # In deg. Will stop alignment when in this range.
         compass_mult = 5  # Multiplier to close and inner_lim when using compass for align.
         pit_off = 0.25  # In deg. To keep the target above the center line (prevent it going down out of view).
-        inertia_pitch_factor = 1.2  # As we are dealing with small increments, we need to up the gain to overcome the inertia.
-        inertia_yaw_factor = 1.2  # As we are dealing with small increments, we need to up the gain to overcome the inertia.
+        inertia_pitch_factor = 1.0 # 1.2  # As we are dealing with small increments, we need to up the gain to overcome the inertia.
+        inertia_yaw_factor = 0.75 # 1.2  # As we are dealing with small increments, we need to up the gain to overcome the inertia.
 
         tar_off = None
         off = None

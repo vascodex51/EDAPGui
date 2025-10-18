@@ -30,7 +30,7 @@ class EDKeys:
         self.ap_ckb = cb
         self.key_mod_delay = 0.010
         self.key_default_delay = 0.200
-        self.key_repeat_delay = 0.100
+        self.key_repeat_delay = 0.350 # 0.100
 
         self.keys_to_obtain = [
             'YawLeftButton',
