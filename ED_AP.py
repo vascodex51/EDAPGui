@@ -8,6 +8,7 @@ from string import Formatter
 from tkinter import messagebox
 
 import cv2
+import numpy as np
 
 from simple_localization import LocalizationManager
 
@@ -1299,7 +1300,15 @@ class EDAutopilot:
         # 2. Convert image to HSV color space (better for color isolation)
         hsv_image = cv2.cvtColor(full_image_raw, cv2.COLOR_BGR2HSV)
 
-        # 3. COLOR MASK CREATION: Obtain only luminosity channel
+        # 3a. COLOR MASK CREATION: Focus on Cyan/Blue Text (not working!)
+        # Define the HSV range for the cyan/blue text. These values may need optimization.
+        # [H_min, S_min, V_min] and [H_max, S_max, V_max]
+        lower_blue = np.array([90, 50, 50])  # Lower threshold: Cyan/Blue color, medium saturation, medium brightness
+        upper_blue = np.array([120, 255, 255])  # Upper threshold: Up to blue, max saturation and brightness
+        # # Create the mask: it will be white where pixels fall within the color range
+        hsv_image = cv2.inRange(hsv_image, lower_blue, upper_blue)
+
+        # 3b. COLOR MASK CREATION: Obtain only luminosity channel
         luminosity_channel = hsv_image[:, :, 2]
 
         # 4. Apply high threshold
@@ -1341,7 +1350,7 @@ class EDAutopilot:
             return False
 
         logger.info(f"sc_disengage: template matching maxVal = {maxVal:.4f}")
-        return True
+        return False
 
     def start_sco_monitoring(self):
         """ Start Supercruise Overcharge Monitoring. This starts a parallel thread used to detect SCO
@@ -2689,7 +2698,7 @@ class EDAutopilot:
             # self.get_target_offset(self.scrReg, True)
 
             # TODO - Enable for test
-            # self.start_sco_monitoring()
+            self.start_sco_monitoring()
 
             if self.fsd_assist_enabled == True:
                 logger.debug("Running fsd_assist")
