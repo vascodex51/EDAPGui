@@ -1,5 +1,7 @@
 from __future__ import annotations
 import time
+from datetime import datetime
+
 import cv2
 import numpy as np
 from cv2.typing import MatLike
@@ -44,6 +46,8 @@ class OCR:
         """
         s1_new = s1.replace("['",  "")
         s1_new = s1_new.replace("']",  "")
+        s1_new = s1_new.replace('["',  "")
+        s1_new = s1_new.replace('"]',  "")
         s1_new = s1_new.replace("', '",  "")
         s1_new = s1_new.replace("<",  "")
         s1_new = s1_new.replace(">",  "")
@@ -51,6 +55,8 @@ class OCR:
 
         s2_new = s2.replace("['",  "")
         s2_new = s2_new.replace("']",  "")
+        s2_new = s2_new.replace('["',  "")
+        s2_new = s2_new.replace('"]',  "")
         s2_new = s2_new.replace("', '",  "")
         s2_new = s2_new.replace("<",  "")
         s2_new = s2_new.replace(">",  "")
@@ -60,9 +66,10 @@ class OCR:
         return self.normalized_levenshtein.similarity(s1_new, s2_new)
         # return self.sorensendice.similarity(s1_new, s2_new)
 
-    def image_ocr(self, image):
+    def image_ocr(self, image, name = ''):
         """ Perform OCR with no filtering. Returns the full OCR data and a simplified list of strings.
         This routine is slower than the simplified OCR.
+        @param name:
         @param image: The image to check.
 
         'ocr_data' is returned in the following format, or (None, None):
@@ -72,32 +79,39 @@ class OCR:
         """
         # Remove Alpha channel if it exists
         image2 = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
-        ocr_data = self.paddleocr.predict(image2)
+        try:
+            ocr_data = self.paddleocr.predict(image2)
 
-        if ocr_data is None:
+            if ocr_data is None:
+                return None, None
+            else:
+                ocr_textlist = []
+                for res in ocr_data:
+                    if res is None:
+                        return None, None
+
+                    # Debug - places all detected data to 'output' folder
+                    if self.ap.debug_ocr:
+                        # x = datetime.now().strftime("%Y-%m-%d %H-%M-%S.%f")[:-3]  # Date time with mS.
+                        res.save_to_img(f"./ocr_output/{name}")
+                        res.save_to_json(f"./ocr_output/{name}")
+
+                    # Added detected text to list
+                    ocr_textlist.extend(res['rec_texts'])
+
+                # print(f"image_simple_ocr: {ocr_textlist}")
+                # logger.info(f"image_simple_ocr: {ocr_textlist}")
+                return ocr_data, ocr_textlist
+
+        except Exception as e:
+            logger.error(f"OCR failed: {e}")
             return None, None
-        else:
-            ocr_textlist = []
-            for res in ocr_data:
-                if res is None:
-                    return None, None
 
-                # Debug - places all detected data to 'output' folder
-                if self.ap.debug_overlay:
-                    res.save_to_img("ocr_output")
-                    res.save_to_json("ocr_output")
-
-                # Added detected text to list
-                ocr_textlist.extend(res['rec_texts'])
-
-            # print(f"image_simple_ocr: {ocr_textlist}")
-            # logger.info(f"image_simple_ocr: {ocr_textlist}")
-            return ocr_data, ocr_textlist
-
-    def image_simple_ocr(self, image) -> list[str] | None:
+    def image_simple_ocr(self, image, name='') -> list[str] | None:
         """ Perform OCR with no filtering. Returns a simplified list of strings with no positional data.
         This routine is faster than the function that returns the full data. Generally good when you
         expect to only return one or two lines of text.
+        @param name:
         @param image: The image to check.
         'ocr_textlist' is returned in the following format, or None:
         ['DESTINATION', 'SIRIUS ATMOSPHERICS']
@@ -105,34 +119,48 @@ class OCR:
         if image is None:
             return None
 
+        # start_time = time.time()
+
         # Remove Alpha channel if it exists
         image2 = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
-        ocr_data = self.paddleocr.predict(image2)
+        try:
+            ocr_data = self.paddleocr.predict(image2)
 
-        if ocr_data is None:
+            # elapsed_time = time.time() - start_time
+            # print(f"OCR took {elapsed_time} secs")
+
+            if ocr_data is None:
+                return None
+            else:
+                ocr_textlist = []
+                for res in ocr_data:
+                    if res is None:
+                        return None
+
+                    # Debug - places all detected data to 'output' folder
+                    if self.ap.debug_ocr:
+                        # x = datetime.now().strftime("%Y-%m-%d %H-%M-%S.%f")[:-3]  # Date time with mS.
+                        res.save_to_img(f"./ocr_output/{name}")
+                        res.save_to_json(f"./ocr_output/{name}")
+                        # res.save_to_img("ocr_output")
+                        # res.save_to_json("ocr_output")
+
+                    # Added detected text to list
+                    ocr_textlist.extend(res['rec_texts'])
+
+                # print(f"image_simple_ocr: {ocr_textlist}")
+                # logger.info(f"image_simple_ocr: {ocr_textlist}")
+                return ocr_textlist
+
+        except Exception as e:
+            logger.error(f"OCR failed: {e}")
             return None
-        else:
-            ocr_textlist = []
-            for res in ocr_data:
-                if res is None:
-                    return None
 
-                # Debug - places all detected data to 'output' folder
-                if self.ap.debug_overlay:
-                    res.save_to_img("ocr_output")
-                    res.save_to_json("ocr_output")
-
-                # Added detected text to list
-                ocr_textlist.extend(res['rec_texts'])
-
-            # print(f"image_simple_ocr: {ocr_textlist}")
-            # logger.info(f"image_simple_ocr: {ocr_textlist}")
-            return ocr_textlist
-
-    def get_highlighted_item_data(self, image, min_w, min_h):
+    def get_highlighted_item_data(self, image, min_w, min_h, name=''):
         """ Attempts to find a selected item in an image. The selected item is identified by being solid orange or blue
             rectangle with dark text, instead of orange/blue text on a dark background.
             The OCR daya of the first item matching the criteria is returned, otherwise None.
+            @param name:
             @param image: The image to check.
             @param min_h: Minimum height in percent of the input image.
             @param min_w: Minimum width in percent of the input image.
@@ -142,7 +170,7 @@ class OCR:
         if img_selected is not None:
             # cv2.imshow("img", img_selected)
 
-            ocr_data, ocr_textlist = self.image_ocr(img_selected)
+            ocr_data, ocr_textlist = self.image_ocr(img_selected, name)
 
             if ocr_data is not None:
                 return img_selected, ocr_data, ocr_textlist, quad
@@ -231,10 +259,11 @@ class OCR:
         image = self.screen.get_screen_rect_pct(rect)
         return image
 
-    def is_text_in_selected_item_in_image(self, img, text, min_w, min_h):
+    def is_text_in_selected_item_in_image(self, img, text, min_w, min_h, name=''):
         """ Does the selected item in the region include the text being checked for.
         Checks if text exists in a region using OCR.
         Return True if found, False if not and None if no item was selected.
+        @param name:
         @param img: The image to check.
         @param text: The text to find.
         @param min_h: Minimum height in percent of the input image.
@@ -245,7 +274,7 @@ class OCR:
             logger.debug(f"Did not find a selected item in the region.")
             return None
 
-        found, results = self.is_text_in_image(text, img_selected)
+        found, results = self.is_text_in_image(text, img_selected, name)
         return found, results
 
     def is_text_in_region(self, text, region) -> (bool, str):
@@ -262,7 +291,7 @@ class OCR:
         found, results = self.is_text_in_image(text, img)
         return found, results
 
-    def is_text_in_image(self, text, image) -> (bool, str):
+    def is_text_in_image(self, text, image, name='') -> (bool, str):
         """ Does the image include the text being checked for. The image does not need
         to include highlighted areas.
         Checks if text exists in an image using OCR.
@@ -275,7 +304,7 @@ class OCR:
             logger.debug(f"is_text_in_image: No image supplied.")
             return None, ""
 
-        ocr_textlist = self.image_simple_ocr(image)
+        ocr_textlist = self.image_simple_ocr(image, name)
         # print(str(ocr_textlist))
 
         # PaddleOCR has difficulty detecting spaces, so strip out spaces for the compare
@@ -289,7 +318,7 @@ class OCR:
             logger.debug(f"Did not find '{text}' text in item text '{str(ocr_textlist)}'.")
             return False, str(ocr_textlist)
 
-    def select_item_in_list(self, text, region, keys, min_w, min_h) -> bool:
+    def select_item_in_list(self, text, region, keys, min_w, min_h, name='') -> bool:
         """ Attempt to find the item by text in a list defined by the region.
         If found, leaves it selected for further actions.
         @param keys:
@@ -305,7 +334,7 @@ class OCR:
             if img is None:
                 return False
 
-            found = self.is_text_in_selected_item_in_image(img, text, min_w, min_h)
+            found = self.is_text_in_selected_item_in_image(img, text, min_w, min_h, name)
 
             # Check if end of list.
             if found is None and in_list:
@@ -360,124 +389,124 @@ class OCR:
         return text_found
 
 
-class RegionCalibration:
-    def __init__(self, root, ed_ap, cb):
-        self.scr = ed_ap.scr
-        self.root = root
-        self.ap = ed_ap
-        self.ap_ckb = cb
-        self.calibration_overlay = None
-        self.ocr_calibration_data = None
-        self.selected_region = None
-        self.calibration_canvas = None
-        self.current_rect = None
-        self.start_y = None
-        self.start_x = None
-
-    def calibrate_ocr_region(self, ocr_calibration_data, selected_region: str):
-        # selected_region = self.calibration_region_var.get()
-        self.ocr_calibration_data = ocr_calibration_data
-        self.selected_region = selected_region
-        if not self.selected_region:
-            messagebox.showerror("Error", "Please select a region to calibrate.")
-            return
-
-        self.ap_ckb('log', f"Starting calibration for: {selected_region}")
-
-        self.calibration_overlay = tk.Toplevel(self.root)
-        self.calibration_overlay.overrideredirect(True)
-
-        screen_w = self.scr.screen_width
-        screen_h = self.scr.screen_height
-        screen_x = self.scr.screen_left
-        screen_y = self.scr.screen_top
-
-        # screen_w = self.root.winfo_screenwidth()
-        # screen_h = self.root.winfo_screenheight()
-        # screen_x = self.root.winfo_x()
-        # screen_y = self.root.winfo_y()
-        # self.calibration_overlay.geometry(f"{screen_w}x{screen_h}+0+0")
-        self.calibration_overlay.geometry(f"{screen_w}x{screen_h}+{screen_x}+{screen_y}")
-
-        self.calibration_overlay.attributes('-alpha', 0.3)
-
-        self.calibration_canvas = tk.Canvas(self.calibration_overlay, highlightthickness=0, bg='black')
-        self.calibration_canvas.pack(fill=tk.BOTH, expand=True)
-
-        # Draw current region
-        rect_pct = self.ocr_calibration_data[selected_region]['rect']
-
-        display_rect_pct = rect_pct
-
-        x1 = display_rect_pct[0] * screen_w
-        y1 = display_rect_pct[1] * screen_h
-        x2 = display_rect_pct[2] * screen_w
-        y2 = display_rect_pct[3] * screen_h
-        self.calibration_canvas.create_rectangle(x1, y1, x2, y2, outline='green1', width=5)
-
-        self.start_x = None
-        self.start_y = None
-        self.current_rect = None
-
-        self.calibration_canvas.bind("<ButtonPress-1>", self.on_calibration_press)
-        self.calibration_canvas.bind("<B1-Motion>", self.on_calibration_drag)
-        self.calibration_canvas.bind("<ButtonRelease-1>", self.on_calibration_release)
-        self.calibration_canvas.bind("<ButtonPress-3>", self.on_calibration_cancel)
-        self.calibration_overlay.bind("<Escape>", lambda e: self.calibration_overlay.destroy())
-
-    def on_calibration_cancel(self, event):
-        self.calibration_overlay.destroy()
-
-    def on_calibration_press(self, event):
-        self.start_x = event.x
-        self.start_y = event.y
-        self.current_rect = self.calibration_canvas.create_rectangle(self.start_x, self.start_y, self.start_x, self.start_y, outline='cyan', width=5)
-
-    def on_calibration_drag(self, event):
-        if self.current_rect:
-            self.calibration_canvas.coords(self.current_rect, self.start_x, self.start_y, event.x, event.y)
-
-    def on_calibration_release(self, event):
-        end_x = event.x
-        end_y = event.y
-
-        screen_w = self.root.winfo_screenwidth()
-        screen_h = self.root.winfo_screenheight()
-
-        # Ensure coordinates are ordered correctly
-        left = min(self.start_x, end_x)
-        top = min(self.start_y, end_y)
-        right = max(self.start_x, end_x)
-        bottom = max(self.start_y, end_y)
-
-        left_pct = left / screen_w
-        top_pct = top / screen_h
-        right_pct = right / screen_w
-        bottom_pct = bottom / screen_h
-
-        # selected_region = self.calibration_region_var.get()
-
-        # Regions that require special scaling normalization to a 1920x1080 reference resolution
-        station_scaled_regions = [
-            "EDGalaxyMap.cartographics",
-            "EDSystemMap.cartographics"
-        ]
-
-        # Get the raw percentages from the drawn box
-        raw_rect_pct = [left_pct, top_pct, right_pct, bottom_pct]
-        raw_rect_pct = [round(left_pct, 4), round(top_pct, 4), round(right_pct, 4), round(bottom_pct, 4)]
-
-        # if self.selected_region.startswith("EDStationServicesInShip.") or self.selected_region in station_scaled_regions:
-        #     new_rect_pct = self._normalize_for_station(raw_rect_pct, screen_w, screen_h)
-        #     if new_rect_pct != raw_rect_pct:
-        #         self.ap_ckb('log', f"Applying station-style normalization for {self.selected_region}.")
-        # else:
-        new_rect_pct = raw_rect_pct
-
-        self.ocr_calibration_data[self.selected_region]['rect'] = new_rect_pct
-        self.ap_ckb('log', f"New rect for {self.selected_region}: {new_rect_pct}")
-
-        # Update label
-        # self.on_region_select(None)
-
-        self.calibration_overlay.destroy()
+# class RegionCalibration:
+#     def __init__(self, root, ed_ap, cb):
+#         self.scr = ed_ap.scr
+#         self.root = root
+#         self.ap = ed_ap
+#         self.ap_ckb = cb
+#         self.calibration_overlay = None
+#         self.ocr_calibration_data = None
+#         self.selected_region = None
+#         self.calibration_canvas = None
+#         self.current_rect = None
+#         self.start_y = None
+#         self.start_x = None
+#
+#     def calibrate_ocr_region(self, ocr_calibration_data, selected_region: str):
+#         # selected_region = self.calibration_region_var.get()
+#         self.ocr_calibration_data = ocr_calibration_data
+#         self.selected_region = selected_region
+#         if not self.selected_region:
+#             messagebox.showerror("Error", "Please select a region to calibrate.")
+#             return
+#
+#         self.ap_ckb('log', f"Starting calibration for: {selected_region}")
+#
+#         self.calibration_overlay = tk.Toplevel(self.root)
+#         self.calibration_overlay.overrideredirect(True)
+#
+#         screen_w = self.scr.screen_width
+#         screen_h = self.scr.screen_height
+#         screen_x = self.scr.screen_left
+#         screen_y = self.scr.screen_top
+#
+#         # screen_w = self.root.winfo_screenwidth()
+#         # screen_h = self.root.winfo_screenheight()
+#         # screen_x = self.root.winfo_x()
+#         # screen_y = self.root.winfo_y()
+#         # self.calibration_overlay.geometry(f"{screen_w}x{screen_h}+0+0")
+#         self.calibration_overlay.geometry(f"{screen_w}x{screen_h}+{screen_x}+{screen_y}")
+#
+#         self.calibration_overlay.attributes('-alpha', 0.3)
+#
+#         self.calibration_canvas = tk.Canvas(self.calibration_overlay, highlightthickness=0, bg='black')
+#         self.calibration_canvas.pack(fill=tk.BOTH, expand=True)
+#
+#         # Draw current region
+#         rect_pct = self.ocr_calibration_data[selected_region]['rect']
+#
+#         display_rect_pct = rect_pct
+#
+#         x1 = display_rect_pct[0] * screen_w
+#         y1 = display_rect_pct[1] * screen_h
+#         x2 = display_rect_pct[2] * screen_w
+#         y2 = display_rect_pct[3] * screen_h
+#         self.calibration_canvas.create_rectangle(x1, y1, x2, y2, outline='green1', width=5)
+#
+#         self.start_x = None
+#         self.start_y = None
+#         self.current_rect = None
+#
+#         self.calibration_canvas.bind("<ButtonPress-1>", self.on_calibration_press)
+#         self.calibration_canvas.bind("<B1-Motion>", self.on_calibration_drag)
+#         self.calibration_canvas.bind("<ButtonRelease-1>", self.on_calibration_release)
+#         self.calibration_canvas.bind("<ButtonPress-3>", self.on_calibration_cancel)
+#         self.calibration_overlay.bind("<Escape>", lambda e: self.calibration_overlay.destroy())
+#
+#     def on_calibration_cancel(self, event):
+#         self.calibration_overlay.destroy()
+#
+#     def on_calibration_press(self, event):
+#         self.start_x = event.x
+#         self.start_y = event.y
+#         self.current_rect = self.calibration_canvas.create_rectangle(self.start_x, self.start_y, self.start_x, self.start_y, outline='cyan', width=5)
+#
+#     def on_calibration_drag(self, event):
+#         if self.current_rect:
+#             self.calibration_canvas.coords(self.current_rect, self.start_x, self.start_y, event.x, event.y)
+#
+#     def on_calibration_release(self, event):
+#         end_x = event.x
+#         end_y = event.y
+#
+#         screen_w = self.root.winfo_screenwidth()
+#         screen_h = self.root.winfo_screenheight()
+#
+#         # Ensure coordinates are ordered correctly
+#         left = min(self.start_x, end_x)
+#         top = min(self.start_y, end_y)
+#         right = max(self.start_x, end_x)
+#         bottom = max(self.start_y, end_y)
+#
+#         left_pct = left / screen_w
+#         top_pct = top / screen_h
+#         right_pct = right / screen_w
+#         bottom_pct = bottom / screen_h
+#
+#         # selected_region = self.calibration_region_var.get()
+#
+#         # Regions that require special scaling normalization to a 1920x1080 reference resolution
+#         station_scaled_regions = [
+#             "EDGalaxyMap.cartographics",
+#             "EDSystemMap.cartographics"
+#         ]
+#
+#         # Get the raw percentages from the drawn box
+#         raw_rect_pct = [left_pct, top_pct, right_pct, bottom_pct]
+#         raw_rect_pct = [round(left_pct, 4), round(top_pct, 4), round(right_pct, 4), round(bottom_pct, 4)]
+#
+#         # if self.selected_region.startswith("EDStationServicesInShip.") or self.selected_region in station_scaled_regions:
+#         #     new_rect_pct = self._normalize_for_station(raw_rect_pct, screen_w, screen_h)
+#         #     if new_rect_pct != raw_rect_pct:
+#         #         self.ap_ckb('log', f"Applying station-style normalization for {self.selected_region}.")
+#         # else:
+#         new_rect_pct = raw_rect_pct
+#
+#         self.ocr_calibration_data[self.selected_region]['rect'] = new_rect_pct
+#         self.ap_ckb('log', f"New rect for {self.selected_region}: {new_rect_pct}")
+#
+#         # Update label
+#         # self.on_region_select(None)
+#
+#         self.calibration_overlay.destroy()

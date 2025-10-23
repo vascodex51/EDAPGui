@@ -1,37 +1,37 @@
-import queue
-import sys
-import os
-import threading
-import kthread
-from datetime import datetime
-from time import sleep
-import cv2
-import json
-from pathlib import Path
+# import queue
+# import sys
+# import os
+# import threading
+# import kthread
+# from datetime import datetime
+# from time import sleep
+# import cv2
+# import json
+# from pathlib import Path
 import keyboard
 import webbrowser
-import requests
+# import requests
 
 
-from PIL import Image, ImageGrab, ImageTk
+# from PIL import Image, ImageGrab, ImageTk
 import tkinter as tk
 from tkinter import filedialog as fd
-from tkinter import messagebox
+# from tkinter import messagebox
 from tkinter import ttk
 import sv_ttk
 import pywinstyles
 import sys  # Do not delete - prevents a 'super' error from tktoolip.
 from tktooltip import ToolTip  # In requirements.txt as 'tkinter-tooltip'.
 
-from OCR import RegionCalibration
-from Voice import *
-from MousePt import MousePoint
+# from OCR import RegionCalibration
+# from Voice import *
+# from MousePt import MousePoint
 
-from Image_Templates import *
-from Screen import *
-from Screen_Regions import *
-from EDKeys import *
-from EDJournal import *
+# from Image_Templates import *
+# from Screen import *
+# from Screen_Regions import *
+# from EDKeys import *
+# from EDJournal import *
 from ED_AP import *
 from EDAPWaypointEditor import WaypointEditorTab
 
@@ -60,13 +60,20 @@ Author: sumzer0@yahoo.com
 # ---------------------------------------------------------------------------
 # must be updated with a new release so that the update check works properly!
 # contains the names of the release.
-EDAP_VERSION = "V1.8.0 beta 10"
+EDAP_VERSION = "V1.8.0 beta 12"
 # depending on how release versions are best marked you could also change it to the release tag, see function check_update.
 # ---------------------------------------------------------------------------
 
 FORM_TYPE_CHECKBOX = 0
 FORM_TYPE_SPINBOX = 1
 FORM_TYPE_ENTRY = 2
+
+
+def str_to_float(input_str: str) -> float:
+    try:
+        return float(input_str)
+    except ValueError:
+        return 0.0  # Assign a default value on error
 
 
 class APGui:
@@ -114,6 +121,8 @@ class APGui:
             'Cap Mouse XY': "This will provide the StationCoord value of the Station in the SystemMap. \nSelecting this button and then clicking on the Station in the SystemMap \nwill return the x,y value that can be pasted in the waypoints file",
             'Reset Waypoint List': "Reset your waypoint list, \nthe waypoint assist will start again at the first point in the list.",
             'Debug Overlay': "Enables debug data to be displayed over the \nElite Dangerous screen while playing the game.",
+            'Debug OCR': "Enables OCR debug output to be stored in the 'ocr_output' folder.",
+            'Debug Images': "Enables debug images to be stored in the 'debug_output' folder.",
         }
 
         self.gui_loaded = False
@@ -123,7 +132,7 @@ class APGui:
         self.load_ocr_calibration_data()
         self.ed_ap = EDAutopilot(cb=self.callback)
         self.ed_ap.robigo.set_single_loop(self.ed_ap.config['Robigo_Single_Loop'])
-        self.calibrator = RegionCalibration(root, self.ed_ap, cb=self.callback)
+        # self.calibrator = RegionCalibration(root, self.ed_ap, cb=self.callback)
 
         self.ocr_calibration_data = {}
 
@@ -154,6 +163,7 @@ class APGui:
         self.checkboxvar['Automatic logout'].set(self.ed_ap.config['AutomaticLogout'])
         self.checkboxvar['Enable Overlay'].set(self.ed_ap.config['OverlayTextEnable'])
         self.checkboxvar['Enable Voice'].set(self.ed_ap.config['VoiceEnable'])
+        self.checkboxvar['Enable Hotkeys'].set(self.ed_ap.config['HotkeysEnable'])
 
         self.radiobuttonvar['dss_button'].set(self.ed_ap.config['DSSButton'])
 
@@ -211,15 +221,17 @@ class APGui:
             self.radiobuttonvar['debug_mode'].set("Error")
 
         self.checkboxvar['Debug Overlay'].set(self.ed_ap.config['DebugOverlay'])
+        self.checkboxvar['Debug OCR'].set(self.ed_ap.config['DebugOCR'])
+        self.checkboxvar['Debug Images'].set(self.ed_ap.config['DebugImages'])
         self.checkboxvar['AFKCombat AttackAtWill'].set(self.ed_ap.config['AFKCombat_AttackAtWill'])
 
         # global trap for these keys, the 'end' key will stop any current AP action
         # the 'home' key will start the FSD Assist.  May want another to start SC Assist
-
-        keyboard.add_hotkey(self.ed_ap.config['HotKey_StopAllAssists'], self.stop_all_assists)
-        keyboard.add_hotkey(self.ed_ap.config['HotKey_StartFSD'], self.callback, args=('fsd_start', None))
-        keyboard.add_hotkey(self.ed_ap.config['HotKey_StartSC'],  self.callback, args=('sc_start',  None))
-        keyboard.add_hotkey(self.ed_ap.config['HotKey_StartRobigo'],  self.callback, args=('robigo_start',  None))
+        if self.ed_ap.config['HotkeysEnable']:
+            keyboard.add_hotkey(self.ed_ap.config['HotKey_StopAllAssists'], self.stop_all_assists)
+            keyboard.add_hotkey(self.ed_ap.config['HotKey_StartFSD'], self.callback, args=('fsd_start', None))
+            keyboard.add_hotkey(self.ed_ap.config['HotKey_StartSC'],  self.callback, args=('sc_start',  None))
+            keyboard.add_hotkey(self.ed_ap.config['HotKey_StartRobigo'],  self.callback, args=('robigo_start',  None))
 
         # check for updates
         self.check_updates()
@@ -585,6 +597,9 @@ class APGui:
             self.ed_ap.config['VoiceEnable'] = self.checkboxvar['Enable Voice'].get()
             self.ed_ap.config['DebugOverlay'] = self.checkboxvar['Debug Overlay'].get()
             self.ed_ap.config['AFKCombat_AttackAtWill'] = self.checkboxvar['AFKCombat AttackAtWill'].get()
+            self.ed_ap.config['HotkeysEnable'] = self.checkboxvar['Enable Hotkeys'].get()
+            self.ed_ap.config['DebugOCR'] = self.checkboxvar['Debug OCR'].get()
+            self.ed_ap.config['DebugImages'] = self.checkboxvar['Debug Images'].get()
         except:
             messagebox.showinfo("Exception", "Invalid float entered")
 
@@ -760,6 +775,13 @@ class APGui:
                 self.ed_ap.debug_overlay = False
 
         self.ed_ap.config['AFKCombat_AttackAtWill'] = self.checkboxvar['AFKCombat AttackAtWill'].get()
+        self.ed_ap.config['HotkeysEnable'] = self.checkboxvar['Enable Hotkeys'].get()
+
+        if field == 'Debug OCR':
+            self.ed_ap.debug_ocr = self.checkboxvar['Debug OCR'].get()
+
+        if field == 'Debug Images':
+            self.ed_ap.debug_images = self.checkboxvar['Debug Images'].get()
 
     def makeform(self, win, ftype, fields, r: int = 0, inc: float = 1, r_from: float = 0, rto: float = 1000):
         entries = {}
@@ -795,11 +817,45 @@ class APGui:
             rect = self.ocr_calibration_data[selected_region]['rect']
             self.calibration_rect_label_var.set(f"[{rect[0]:.4f}, {rect[1]:.4f}, {rect[2]:.4f}, {rect[3]:.4f}]")
             self.calibration_rect_text_var.set(f"{self.ocr_calibration_data[selected_region].get('text','')}")
-            # self.calibration_rect_left_var.set(rect[0])
+            self.calibration_rect_left_var.set(rect[0])
+            self.calibration_rect_top_var.set(rect[1])
+            self.calibration_rect_right_var.set(rect[2])
+            self.calibration_rect_bottom_var.set(rect[3])
 
             reg_f = Quad.from_rect(rect)
-            self.ed_ap.overlay.overlay_quad_pct('region select', reg_f, (0, 255, 0), 2)
+            self.ed_ap.overlay.overlay_quad_pct('region select', reg_f, (0, 255, 0), 2, 15)
             self.ed_ap.overlay.overlay_paint()
+
+    def on_region_size_change(self):
+        # Check if variables are valid
+        l_str = self.calibration_rect_left_var.get()
+        t_str = self.calibration_rect_top_var.get()
+        r_str = self.calibration_rect_right_var.get()
+        b_str = self.calibration_rect_bottom_var.get()
+        # Check if any are empty
+        if l_str == '' or r_str == '' or t_str == '' or b_str == '':
+            return
+
+        selected_region = self.calibration_region_var.get()
+        if selected_region in self.ocr_calibration_data:
+            rect = self.ocr_calibration_data[selected_region]['rect']
+            rect[0] = str_to_float(l_str)
+            rect[1] = str_to_float(t_str)
+            rect[2] = str_to_float(r_str)
+            rect[3] = str_to_float(b_str)
+
+            self.calibration_rect_label_var.set(f"[{rect[0]:.4f}, {rect[1]:.4f}, {rect[2]:.4f}, {rect[3]:.4f}]")
+            self.calibration_rect_text_var.set(f"{self.ocr_calibration_data[selected_region].get('text','')}")
+
+            reg_f = Quad.from_rect(rect)
+            self.ed_ap.overlay.overlay_quad_pct('region select', reg_f, (0, 255, 0), 2, 15)
+            self.ed_ap.overlay.overlay_paint()
+
+    @staticmethod
+    def calibrate_region_help():
+        # TODO - delete first line and enable the second.
+        webbrowser.open_new("https://github.com/Stumpii/EDAPGui/blob/main/docs/Calibration.md")
+        # webbrowser.open_new("https://github.com/SumZer0-git/EDAPGui/blob/main/docs/Calibration.md")
 
     def create_calibration_tab(self, tab):
         self.load_ocr_calibration_data()
@@ -826,15 +882,34 @@ class APGui:
         self.calibration_rect_label_var = tk.StringVar()
         ttk.Label(blk_region_cal, textvariable=self.calibration_rect_label_var).grid(row=2, column=1, padx=5, pady=5, sticky=tk.W)
 
-        # # TODO - new
-        # self.calibration_rect_left_var = tk.StringVar()
-        # lbl_sun_pitch_up = ttk.Label(blk_region_cal, text='Left:')
-        # lbl_sun_pitch_up.grid(row=3, column=0, pady=3, sticky=tk.W)
-        # spn_sun_pitch_up = ttk.Spinbox(blk_region_cal, textvariable=self.calibration_rect_left_var, width=10, from_=0, to=1, increment=0.001, justify=tk.RIGHT, command=on_spinbox_change)
-        # spn_sun_pitch_up.grid(row=3, column=1, padx=2, pady=2, sticky=tk.E)
-        # #spn_sun_pitch_up.bind('<FocusOut>', self.entry_update)
+        ttk.Label(blk_region_cal, text="Manually change the region below and save.\nHint: You can also use your keyboard up and down arrow keys.").grid(row=3, column=0, columnspan=2, padx=5, pady=5, sticky=tk.W)
 
-        ttk.Button(blk_region_cal, text="Calibrate Region", command=self.calibrate_ocr_region).grid(row=4, column=0, padx=5, pady=5, sticky=tk.W)
+        self.calibration_rect_left_var = tk.StringVar()
+        lbl_calibration_rect_left = ttk.Label(blk_region_cal, text='Left:')
+        lbl_calibration_rect_left.grid(row=4, column=0, padx=5, pady=5, sticky=tk.W)
+        spn_calibration_rect_left = ttk.Spinbox(blk_region_cal, textvariable=self.calibration_rect_left_var, width=10, from_=0, to=1, increment=0.001, justify=tk.RIGHT, command=self.on_region_size_change)
+        spn_calibration_rect_left.grid(row=4, column=1, padx=5, pady=5, sticky=tk.W)
+
+        self.calibration_rect_top_var = tk.StringVar()
+        lbl_calibration_rect_top = ttk.Label(blk_region_cal, text='Top:')
+        lbl_calibration_rect_top.grid(row=5, column=0, padx=5, pady=5, sticky=tk.W)
+        spn_calibration_rect_top = ttk.Spinbox(blk_region_cal, textvariable=self.calibration_rect_top_var, width=10, from_=0, to=1, increment=0.001, justify=tk.RIGHT, command=self.on_region_size_change)
+        spn_calibration_rect_top.grid(row=5, column=1, padx=5, pady=5, sticky=tk.W)
+
+        self.calibration_rect_right_var = tk.StringVar()
+        lbl_calibration_rect_right = ttk.Label(blk_region_cal, text='Right:')
+        lbl_calibration_rect_right.grid(row=6, column=0, padx=5, pady=5, sticky=tk.W)
+        spn_calibration_rect_right = ttk.Spinbox(blk_region_cal, textvariable=self.calibration_rect_right_var, width=10, from_=0, to=1, increment=0.001, justify=tk.RIGHT, command=self.on_region_size_change)
+        spn_calibration_rect_right.grid(row=6, column=1, padx=5, pady=5, sticky=tk.W)
+
+        self.calibration_rect_bottom_var = tk.StringVar()
+        lbl_calibration_rect_bottom = ttk.Label(blk_region_cal, text='Bottom:')
+        lbl_calibration_rect_bottom.grid(row=7, column=0, padx=5, pady=5, sticky=tk.W)
+        spn_calibration_rect_bottom = ttk.Spinbox(blk_region_cal, textvariable=self.calibration_rect_bottom_var, width=10, from_=0, to=1, increment=0.001, justify=tk.RIGHT, command=self.on_region_size_change)
+        spn_calibration_rect_bottom.grid(row=7, column=1, padx=5, pady=5, sticky=tk.W)
+
+        # ttk.Button(blk_region_cal, text="Calibrate Region", command=self.calibrate_ocr_region).grid(row=8, column=0, padx=5, pady=10, sticky=tk.W)
+        ttk.Button(blk_region_cal, text="Calibrate Region help online", command=self.calibrate_region_help).grid(row=8, column=0, padx=5, pady=10, sticky=tk.W)
 
         # Compass and Target Calibrations
         blk_other_cal = ttk.LabelFrame(tab, text="Compass and Target Calibrations")
@@ -872,11 +947,10 @@ class APGui:
         overlay_entry_fields = ('X Offset', 'Y Offset', 'Font Size')
 
         # notebook pages
-        nb = ttk.Notebook(win)
         btn_save = ttk.Button(win, text='Save All Settings', command=self.save_settings, style="Accent.TButton")
         btn_save.grid(row=0, padx=10, pady=5, sticky="W")
 
-        nb.grid()
+        nb = ttk.Notebook(win)
         nb.grid(row=1, padx=10, pady=5, sticky="NSEW")
         
         page0 = ttk.Frame(nb)
@@ -1004,7 +1078,10 @@ class APGui:
         rb_dss_primary.grid(row=0, column=1, sticky=tk.W)
         rb_dss_secandary = ttk.Radiobutton(blk_dss, text="Secondary", variable=self.radiobuttonvar['dss_button'], value="Secondary", command=(lambda field='dss_button': self.check_cb(field)))
         rb_dss_secandary.grid(row=1, column=1, sticky=tk.W)
-        self.entries['buttons'] = self.makeform(blk_buttons, FORM_TYPE_ENTRY, buttons_entry_fields, 2)
+        self.checkboxvar['Enable Hotkeys'] = tk.BooleanVar()
+        cb_enable = ttk.Checkbutton(blk_buttons, text='Enable Hotkeys (requires restart)', variable=self.checkboxvar['Enable Hotkeys'], command=(lambda field='Enable Hotkeys': self.check_cb(field)))
+        cb_enable.grid(row=2, column=0, columnspan=2, sticky=tk.W)
+        self.entries['buttons'] = self.makeform(blk_buttons, FORM_TYPE_ENTRY, buttons_entry_fields, 3)
 
         # refuel settings block
         blk_fuel = ttk.LabelFrame(blk_settings, text="FUEL", padding=(10, 5))
@@ -1117,11 +1194,21 @@ class APGui:
         cb_debug_overlay.grid(row=6, column=0, padx=2, pady=2, columnspan=2, sticky="NSEW")
         tip = ToolTip(cb_debug_overlay, msg=self.tooltips['Debug Overlay'], delay=1.0, bg="#808080", fg="#FFFFFF")
 
+        self.checkboxvar['Debug OCR'] = tk.BooleanVar()
+        cb_debug_ocr = ttk.Checkbutton(blk_debug_buttons, text="Debug OCR - Writes OCR output to 'ocr-output' folder", variable=self.checkboxvar['Debug OCR'], command=(lambda field='Debug OCR': self.check_cb(field)))
+        cb_debug_ocr.grid(row=7, column=0, padx=2, pady=2, columnspan=2, sticky="NSEW")
+        tip = ToolTip(cb_debug_ocr, msg=self.tooltips['Debug OCR'], delay=1.0, bg="#808080", fg="#FFFFFF")
+
+        self.checkboxvar['Debug Images'] = tk.BooleanVar()
+        cb_debug_images = ttk.Checkbutton(blk_debug_buttons, text="Debug Images - Writes debug images to 'debug-output' folder", variable=self.checkboxvar['Debug Images'], command=(lambda field='Debug Images': self.check_cb(field)))
+        cb_debug_images.grid(row=8, column=0, padx=2, pady=2, columnspan=2, sticky="NSEW")
+        tip = ToolTip(cb_debug_images, msg=self.tooltips['Debug Images'], delay=1.0, bg="#808080", fg="#FFFFFF")
+
         btn_save = ttk.Button(blk_debug_buttons, text='Save All Settings', command=self.save_settings, style="Accent.TButton")
-        btn_save.grid(row=7, column=0, padx=2, pady=2, columnspan=2, sticky="NSEW")
+        btn_save.grid(row=9, column=0, padx=2, pady=2, columnspan=2, sticky="NSEW")
 
         blk_rpy = ttk.LabelFrame(page2, text="RPY Test", padding=(10, 5))
-        blk_rpy.grid(row=8, column=0, columnspan=2, padx=2, pady=2, sticky="NSEW")
+        blk_rpy.grid(row=10, column=0, columnspan=2, padx=2, pady=2, sticky="NSEW")
         blk_rpy.columnconfigure([0, 1, 2], weight=1, minsize=100)
 
         btn_tst_roll_30 = ttk.Button(blk_rpy, text='Test Roll Rate (30 deg)', command=self.ship_tst_roll_30)
@@ -1155,12 +1242,9 @@ class APGui:
 
         return mylist
 
-    def calibrate_ocr_region(self):
-        selected_region = self.calibration_region_var.get()
-        self.calibrator.calibrate_ocr_region(self.ocr_calibration_data, selected_region)
-
-        # Update label
-        self.on_region_select(None)
+    # def calibrate_ocr_region(self):
+    #     selected_region = self.calibration_region_var.get()
+    #     self.calibrator.calibrate_ocr_region(self.ocr_calibration_data, selected_region)
 
     def load_ocr_calibration_data(self):
         self.ocr_calibration_data = {}
