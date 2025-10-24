@@ -53,6 +53,8 @@ class Image_Templates:
         self.template['target']    = self.load_template("templates/destination.png", target_scale, target_scale)
         self.template['target_occluded']    = self.load_template("templates/target_occluded.png", target_scale, target_scale)
         self.template['disengage'] = self.load_template("templates/sc-disengage.png", scale_x, scale_y)
+        self.template['disengage_cropped'] = self.load_template("templates/sc-disengage_cropped.png", scale_x, scale_y)
+        self.template['disengage_cropped_90pc'] = self.load_template("templates/sc-disengage_cropped_90pc.png", scale_x, scale_y)
         self.template['missions']  = self.load_template("templates/completed-missions.png", scale_x, scale_y)
         self.template['dest_sirius'] = self.load_template("templates/dest-sirius-atmos-HL.png", scale_x, scale_y)
         self.template['robigo_mines']  = self.load_template("templates/robigo-mines-selected.png", scale_x, scale_y)

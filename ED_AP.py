@@ -1318,10 +1318,14 @@ class EDAutopilot:
 
     def sc_disengage_new(self, scr_reg) -> bool:
         """
-        Improved Template Matching
+        Improved Template Matching: we use a new cropped template, contained only the "TO DISENGAGE" text without borders.
+        For the Mandalay this template is scaled at 90%.
         """
         region_name = 'disengage'
-        templ_name = 'disengage'
+        if self.current_ship_type == "Mandalay":
+            templ_name = 'disengage_cropped_90pc'
+        else:
+            templ_name = 'disengage_cropped'
 
         # 1. Screen capture (BGR)
         raw_region_rect = scr_reg.reg[region_name]['rect']
@@ -1332,13 +1336,14 @@ class EDAutopilot:
         # 2. Convert image to HSV color space (better for color isolation)
         hsv_image = cv2.cvtColor(full_image_raw, cv2.COLOR_BGR2HSV)
 
+        # TODO: VERIFY COLOR FILTERING (code temporary commented)
         # 3a. COLOR MASK CREATION: Focus on Cyan/Blue Text (not working!)
         # Define the HSV range for the cyan/blue text. These values may need optimization.
         # [H_min, S_min, V_min] and [H_max, S_max, V_max]
-        lower_blue = np.array([90, 50, 50])  # Lower threshold: Cyan/Blue color, medium saturation, medium brightness
-        upper_blue = np.array([120, 255, 255])  # Upper threshold: Up to blue, max saturation and brightness
+        #lower_blue = np.array([90, 50, 50])  # Lower threshold: Cyan/Blue color, medium saturation, medium brightness
+        #upper_blue = np.array([120, 255, 255])  # Upper threshold: Up to blue, max saturation and brightness
         # # Create the mask: it will be white where pixels fall within the color range
-        hsv_image = cv2.inRange(hsv_image, lower_blue, upper_blue)
+        #hsv_image = cv2.inRange(hsv_image, lower_blue, upper_blue)
 
         # 3b. COLOR MASK CREATION: Obtain only luminosity channel
         luminosity_channel = hsv_image[:, :, 2]
@@ -1374,7 +1379,7 @@ class EDAutopilot:
             dis_image = cv2.rectangle(img_display, pt, (pt[0] + width, pt[1] + height), cv_overlay_color, 1)
             cv2.putText(dis_image, f'{maxVal:5.4f} > {scr_reg.disengage_thresh}', (1, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, cv_overlay_color, 1, cv2.LINE_AA)
             cv2.imshow('sc_disengage_new', dis_image)
-            cv2.moveWindow('sc_disengage_new', self.cv_view_x + 20, self.cv_view_y + 575)
+            cv2.moveWindow('sc_disengage_new', self.cv_view_x, self.cv_view_y)
             cv2.waitKey(1)
 
         # Fast threshold check
@@ -1382,7 +1387,7 @@ class EDAutopilot:
             return False
 
         logger.info(f"sc_disengage: template matching maxVal = {maxVal:.4f}")
-        return False
+        return True
 
     def start_sco_monitoring(self):
         """ Start Supercruise Overcharge Monitoring. This starts a parallel thread used to detect SCO
@@ -1436,7 +1441,8 @@ class EDAutopilot:
                 # self._sc_disengage_active = self.sc_disengage(self.scrReg)
 
                 # if self.sc_disengage_label_up(scr_reg):
-                self._sc_disengage_active = self.sc_disengage_ocr(self.scrReg)
+                #self._sc_disengage_active = self.sc_disengage_ocr(self.scrReg)
+                self._sc_disengage_active = self.sc_disengage_new(self.scrReg)
             else:
                 self._sc_disengage_active = False
 
