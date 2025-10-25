@@ -25,3 +25,4 @@ test/match/
 *.log
 /venv
 /waypoints/*.json
+*/__pycache__/
