@@ -399,9 +399,11 @@ class CommoditiesMarket:
         act_qty = qty
 
         if index > -1:
-            keys.send('UI_Up', hold=3.0)  # go up to top of list
+            keys.send('UI_Up', hold=5.0)  # go up to top of list
+            sleep(1.0)
             keys.send('UI_Down', hold=0.05, repeat=index)  # go down # of times user specified
-            sleep(0.5)
+
+            sleep(0.75)
             keys.send('UI_Select')  # Select that commodity
 
             if self.ap.debug_overlay:
