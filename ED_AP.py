@@ -1364,6 +1364,8 @@ class EDAutopilot:
         Improved Template Matching: we use a new cropped template, contained only the "TO DISENGAGE" text without borders.
         For the Mandalay this template is scaled at 90%.
         """
+        use_inRange = True  # True to filter colors using inRange, False to use only luminosity
+
         region_name = 'disengage'
         if self.current_ship_type == "Mandalay":
             templ_name = 'disengage_cropped_90pc'
@@ -1372,27 +1374,30 @@ class EDAutopilot:
 
         # 1. Screen capture (BGR)
         raw_region_rect = scr_reg.reg[region_name]['rect']
-        full_image_raw = self.scr.get_screen_region(raw_region_rect, rgb=True)
+        full_image_raw = self.scr.get_screen_region(raw_region_rect, rgb=False)
         if full_image_raw is None:
             return False
 
         # 2. Convert image to HSV color space (better for color isolation)
         hsv_image = cv2.cvtColor(full_image_raw, cv2.COLOR_BGR2HSV)
 
-        # TODO: VERIFY COLOR FILTERING (code temporary commented)
-        # 3a. COLOR MASK CREATION: Focus on Cyan/Blue Text (not working!)
-        # Define the HSV range for the cyan/blue text. These values may need optimization.
-        # [H_min, S_min, V_min] and [H_max, S_max, V_max]
-        #lower_blue = np.array([90, 50, 50])  # Lower threshold: Cyan/Blue color, medium saturation, medium brightness
-        #upper_blue = np.array([120, 255, 255])  # Upper threshold: Up to blue, max saturation and brightness
-        # # Create the mask: it will be white where pixels fall within the color range
-        #hsv_image = cv2.inRange(hsv_image, lower_blue, upper_blue)
-
-        # 3b. COLOR MASK CREATION: Obtain only luminosity channel
-        luminosity_channel = hsv_image[:, :, 2]
-
-        # 4. Apply high threshold
-        _, img_binary = cv2.threshold(luminosity_channel, 180, 255, cv2.THRESH_BINARY)
+        if use_inRange:
+            # 3. COLOR MASK CREATION: Focus on Cyan/Blue Text
+            # Define the HSV range for the cyan/blue text. These values may need optimization.
+            # [H_min, S_min, V_min] and [H_max, S_max, V_max] (H=0..180, S=0..255, V=0..255)
+            # "TO DISENGAGE" = 185(0..360), 60(0..100), 75(0..100) = 92(0..180), 153(0..255), 191(0..255)
+            lower_blue = np.array([80, 50, 120])  # Lower threshold: Cyan/Blue color, medium saturation, medium brightness
+            upper_blue = np.array([105, 255, 255])  # Upper threshold: Up to blue, max saturation and brightness
+            # Create the mask: it will be white where pixels fall within the color range
+            img_binary = cv2.inRange(hsv_image, lower_blue, upper_blue)
+            # 4. Morphological Operations to Merge Fragments (Cleanup)
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+            img_binary = cv2.dilate(img_binary, kernel, iterations=1)
+        else:
+            # 3. COLOR MASK CREATION: Obtain only luminosity channel
+            luminosity_channel = hsv_image[:, :, 2]
+            # 4. Apply high threshold
+            _, img_binary = cv2.threshold(luminosity_channel, 180, 255, cv2.THRESH_BINARY)
 
         # 5. Template matching
         template_data = scr_reg.templates.template[templ_name]
