@@ -301,8 +301,8 @@ class CommoditiesMarket:
 
         if index > -1:
             keys.send('UI_Up', hold=5.0)  # go up to top of list
-            sleep(2.0)
-            keys.send('UI_Down', hold=0.1, repeat=index)  # go down # of times user specified
+            sleep(1.0)
+            keys.send('UI_Down', hold=0.05, repeat=index)  # go down # of times user specified
 
             # # Get the goods panel image
             # goods_panel = self.capture_goods_panel()
@@ -336,7 +336,7 @@ class CommoditiesMarket:
             #                                                   q_out.get_left(), q_out.get_top() - 25, (0, 255, 0))
             #             self.ap.overlay.overlay_paint()
 
-            sleep(1.5)
+            sleep(0.75)
             keys.send('UI_Select')  # Select that commodity
 
             if self.ap.debug_overlay:

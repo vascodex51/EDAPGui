@@ -22,6 +22,7 @@ configs/construction.json
 configs/ocr_calibration.json
 configs/ship_configs.json
 test/match/
+debug-output/
 *.log
 /venv
 /waypoints/*.json

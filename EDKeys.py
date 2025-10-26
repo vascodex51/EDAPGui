@@ -28,9 +28,10 @@ class EDKeys:
 
     def __init__(self, cb):
         self.ap_ckb = cb
-        self.key_mod_delay = 0.010
-        self.key_default_delay = 0.200
-        self.key_repeat_delay = 0.350 # 0.100
+        self.key_mod_delay = 0.01  # Delay for key modifiers to ensure modifier is detected before/after the key
+        self.key_def_hold_time = 0.2  # Default hold time for a key press
+        self.key_repeat_delay = 0.1  # Delay between key press repeats
+        self.activate_window = False
 
         self.keys_to_obtain = [
             'YawLeftButton',
